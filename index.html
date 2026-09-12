@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>مدیریت مالی شخصی</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">داشبورد مالی</div>
+        <h1 id="pageTitle">خانه</h1>
+      </div>
+      <button class="icon-button" aria-label="اعلان‌ها">♧</button>
+    </header>
+
+    <main id="app" class="main-content"></main>
+
+    <nav class="bottom-nav" aria-label="ناوبری اصلی">
+      <button class="nav-item active" data-page="home">
+        <span class="nav-icon">⌂</span><span>خانه</span>
+      </button>
+      <button class="nav-item" data-page="reports">
+        <span class="nav-icon">▥</span><span>گزارش</span>
+      </button>
+      <button class="nav-item" data-page="transactions">
+        <span class="nav-icon">↕</span><span>تراکنش‌ها</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
