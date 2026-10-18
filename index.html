@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -5,8 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
   <title>مدیریت مالی شخصی</title>
+
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Telegram Mini App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
   <div class="app-shell">
     <header class="topbar">
@@ -21,17 +27,52 @@
 
     <nav class="bottom-nav" aria-label="ناوبری اصلی">
       <button class="nav-item active" data-page="home">
-        <span class="nav-icon">⌂</span><span>خانه</span>
+        <span class="nav-icon">⌂</span>
+        <span>خانه</span>
       </button>
+
       <button class="nav-item" data-page="reports">
-        <span class="nav-icon">▥</span><span>گزارش</span>
+        <span class="nav-icon">▥</span>
+        <span>گزارش</span>
       </button>
+
       <button class="nav-item" data-page="transactions">
-        <span class="nav-icon">↕</span><span>تراکنش‌ها</span>
+        <span class="nav-icon">↕</span>
+        <span>تراکنش‌ها</span>
       </button>
     </nav>
   </div>
 
+  <!-- آماده‌سازی اتصال به تلگرام -->
+  <script>
+    window.financeTelegram = {
+      ready: false,
+      userId: null,
+      initData: "",
+
+      getUserId: function () {
+        return this.userId;
+      },
+
+      getInitData: function () {
+        return this.initData;
+      }
+    };
+
+    if (window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+
+      tg.ready();
+      tg.expand();
+
+      window.financeTelegram.ready = true;
+      window.financeTelegram.userId =
+        tg.initDataUnsafe?.user?.id ?? null;
+      window.financeTelegram.initData = tg.initData || "";
+    }
+  </script>
+
+  <!-- کد اصلی مینی‌اپ -->
   <script src="app.js"></script>
 </body>
 </html>
