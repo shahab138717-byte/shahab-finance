@@ -1,4 +1,3 @@
-
 (() => {
   'use strict';
 
@@ -34,16 +33,49 @@
     style.id = 'finance-app-styles';
 
     style.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+
+      :root {
+        --fa-bg: #f5f7fb;
+        --fa-surface: #ffffff;
+        --fa-text: #111827;
+        --fa-muted: #6b7280;
+        --fa-border: #e5e7eb;
+        --fa-primary: #111827;
+        --fa-green: #15803d;
+        --fa-red: #dc2626;
+        --fa-radius: 20px;
+        --fa-shadow: 0 8px 30px rgba(15, 23, 42, .06);
+      }
+
+      body {
+        margin: 0;
+        background: var(--fa-bg);
+        color: var(--fa-text);
+        font-family: "Vazirmatn", Tahoma, sans-serif;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      /* فقط ظاهر بخش برنامه؛ منطق JavaScript تغییر نکرده است. */
       #app {
         direction: rtl;
         text-align: right;
-        font-family: inherit;
-        padding: 16px;
-        padding-bottom: 100px;
-        color: var(--tg-theme-text-color, #222);
+        font-family: "Vazirmatn", Tahoma, sans-serif;
+        width: 100%;
+        max-width: 1100px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 24px 20px 112px;
+        color: var(--fa-text);
       }
 
-      #app * { box-sizing: border-box; }
+      #app * {
+        box-sizing: border-box;
+      }
 
       .fa-header {
         display: flex;
@@ -53,44 +85,68 @@
         margin-bottom: 22px;
       }
 
-      .fa-header h2 { margin: 0; font-size: 23px; }
+      .fa-header h2 {
+        margin: 0;
+        color: var(--fa-text);
+        font-size: 25px;
+        font-weight: 800;
+      }
 
       .fa-muted {
-        color: var(--tg-theme-hint-color, #888);
-        font-size: 13px;
+        color: var(--fa-muted);
+        font-size: 12px;
+        line-height: 1.8;
       }
 
       .fa-card {
-        background: var(--tg-theme-secondary-bg-color, #f4f5f7);
-        border-radius: 18px;
+        background: var(--fa-surface);
+        border: 1px solid var(--fa-border);
+        border-radius: var(--fa-radius);
+        box-shadow: var(--fa-shadow);
         padding: 18px;
         margin-bottom: 14px;
       }
 
       .fa-balance {
-        background: var(--tg-theme-button-color, #2481cc);
-        color: var(--tg-theme-button-text-color, white);
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
+        color: var(--fa-text);
       }
 
-      .fa-balance .fa-muted { color: inherit; opacity: .8; }
+      .fa-balance .fa-muted {
+        color: var(--fa-muted);
+        opacity: 1;
+      }
 
       .fa-number {
+        color: var(--fa-text);
         font-size: 25px;
-        font-weight: 700;
-        margin-top: 10px;
+        line-height: 1.7;
+        font-weight: 800;
+        margin-top: 7px;
         overflow-wrap: anywhere;
+        letter-spacing: -.4px;
       }
 
       .fa-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .fa-grid .fa-card {
+        min-width: 0;
+        padding: 15px;
+      }
+
+      .fa-grid .fa-number {
+        font-size: 19px;
       }
 
       .fa-section-title {
-        font-size: 17px;
-        font-weight: 700;
-        margin: 24px 0 12px;
+        color: var(--fa-text);
+        font-size: 16px;
+        font-weight: 800;
+        margin: 22px 0 12px;
       }
 
       .fa-row {
@@ -98,29 +154,37 @@
         justify-content: space-between;
         align-items: center;
         gap: 12px;
-        padding: 13px 0;
-        border-bottom: 1px solid var(--tg-theme-section-separator-color, #ddd);
+        padding: 14px 0;
+        border-bottom: 1px solid var(--fa-border);
       }
 
-      .fa-row:last-child { border-bottom: 0; }
+      .fa-row:last-child {
+        border-bottom: 0;
+      }
 
       .fa-row-name {
-        font-weight: 600;
+        color: var(--fa-text);
+        font-size: 13px;
+        font-weight: 700;
         overflow-wrap: anywhere;
       }
 
       .fa-row-amount {
-        font-weight: 700;
+        color: var(--fa-text);
+        font-size: 12px;
+        font-weight: 800;
         white-space: nowrap;
       }
 
       .fa-button {
-        border: 0;
-        border-radius: 12px;
-        padding: 12px 18px;
-        background: var(--tg-theme-button-color, #2481cc);
-        color: var(--tg-theme-button-text-color, white);
-        font-size: 14px;
+        border: 1px solid var(--fa-border);
+        border-radius: 13px;
+        padding: 10px 13px;
+        background: var(--fa-surface);
+        color: var(--fa-text);
+        box-shadow: var(--fa-shadow);
+        font-size: 12px;
+        font-weight: 700;
         cursor: pointer;
       }
 
@@ -128,42 +192,94 @@
         text-align: center;
         padding: 40px 10px;
         line-height: 2;
+        color: var(--fa-muted);
       }
 
-      .fa-error { color: #d94747; }
+      .fa-error {
+        color: var(--fa-red);
+      }
 
       .fa-empty {
         padding: 15px 0;
-        color: var(--tg-theme-hint-color, #888);
-        font-size: 14px;
+        color: var(--fa-muted);
+        font-size: 13px;
       }
 
       .fa-nav {
         position: fixed;
         z-index: 100;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        justify-content: space-around;
-        padding: 10px 5px calc(10px + env(safe-area-inset-bottom));
-        background: var(--tg-theme-bg-color, white);
-        border-top: 1px solid var(--tg-theme-section-separator-color, #ddd);
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: min(calc(100% - 24px), 560px);
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        padding: 8px;
+        background: rgba(255, 255, 255, .94);
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--fa-border);
+        border-radius: 21px;
+        box-shadow: 0 12px 35px rgba(15, 23, 42, .12);
       }
 
       .fa-nav button {
-        flex: 1;
+        min-width: 0;
         border: 0;
+        border-radius: 15px;
         background: transparent;
-        color: var(--tg-theme-hint-color, #888);
-        padding: 8px 2px;
-        font-size: 12px;
+        color: var(--fa-muted);
+        padding: 9px 6px;
+        font-family: "Vazirmatn", Tahoma, sans-serif;
+        font-size: 10px;
+        line-height: 1.6;
+        font-weight: 600;
         cursor: pointer;
       }
 
       .fa-nav button.active {
-        color: var(--tg-theme-button-color, #2481cc);
+        background: var(--fa-primary);
+        color: #ffffff;
         font-weight: 700;
+      }
+
+      /* اگر نوار ناوبری نمونه قدیمی در HTML مانده باشد، از نمایش تکراری جلوگیری می‌شود. */
+      .bottom-nav {
+        display: none !important;
+      }
+
+      @media (max-width: 380px) {
+        #app {
+          padding: 20px 14px 108px;
+        }
+
+        .fa-header h2 {
+          font-size: 22px;
+        }
+
+        .fa-number {
+          font-size: 21px;
+        }
+
+        .fa-grid {
+          gap: 8px;
+        }
+
+        .fa-grid .fa-card {
+          padding: 12px;
+        }
+
+        .fa-grid .fa-number {
+          font-size: 16px;
+        }
+      }
+
+      @media (min-width: 700px) {
+        #app {
+          padding: 32px 28px 120px;
+        }
       }
     `;
 
