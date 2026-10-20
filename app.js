@@ -47,7 +47,7 @@
 
 // 2. آدرس Webhook
 const FINANCE_HOME_WEBHOOK_URL =
-  "https://n8n.mediasun.info/webhook-test/api/finance-home";
+  "https://n8n.mediasun.info/webhook/api/finance-home";
 
 // 3. اطلاعات مالی
 const financeData = {
