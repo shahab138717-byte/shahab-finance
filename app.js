@@ -93,14 +93,38 @@ function escapeHtml(s) {
 
 // 5. دریافت اطلاعات از n8n
 async function getFinanceHomeFromN8n() {
-  const initData =
-    window.financeTelegram?.getInitData?.() || "";
+  const telegram = window.Telegram?.WebApp;
+  const userId = telegram?.initDataUnsafe?.user?.id;
 
-  if (!initData) {
-    throw new Error(
-      "اطلاعات تلگرام دریافت نشد؛ مینی‌اپ را از داخل تلگرام باز کن."
-    );
+  if (!userId) {
+    throw new Error('شناسه تلگرام پیدا نشد؛ مینی‌اپ را از داخل ربات باز کن.');
   }
+
+  const response = await fetch(
+    'https://n8n.mediasun.info/webhook/api/finance-home',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: String(userId)
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`خطای n8n: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.error || 'دریافت اطلاعات ناموفق بود');
+  }
+
+  return data;
+}
 
   const response = await fetch(FINANCE_HOME_WEBHOOK_URL, {
     method: "POST",
