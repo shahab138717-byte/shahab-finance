@@ -339,7 +339,7 @@
         </div>
       </div>
 
-      <div class="fa-section-title">۵ دسته پرکاربرد</div>
+      <div class="fa-section-title">۵ دسته پرهزینه</div>
 
       <div class="fa-card">
         ${
