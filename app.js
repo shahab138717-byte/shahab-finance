@@ -6,6 +6,10 @@
   const API_URL =
     'https://n8n.mediasun.info/webhook/api/finance-home';
 
+  // آدرس وب‌هوک تراکنش‌ها
+  const TRANSACTIONS_API_URL =
+    'https://n8n.mediasun.info/webhook/api/finance-transactions';
+
   const app = document.getElementById('app');
 
   if (!app) {
@@ -17,10 +21,14 @@
     page: 'home',
     loading: true,
     error: '',
-    data: null
+    data: null,
+    transactions: [],
+    transactionsLoading: false,
+    transactionsError: '',
+    transactionsLoaded: false
   };
 
-  // استایل‌های مستقل مینی‌اپ
+  // استایل‌های مینی‌اپ
   if (!document.getElementById('finance-app-styles')) {
     const style = document.createElement('style');
     style.id = 'finance-app-styles';
@@ -41,6 +49,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
         margin-bottom: 22px;
       }
 
@@ -95,7 +104,10 @@
 
       .fa-row:last-child { border-bottom: 0; }
 
-      .fa-row-name { font-weight: 600; overflow-wrap: anywhere; }
+      .fa-row-name {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
 
       .fa-row-amount {
         font-weight: 700;
@@ -158,7 +170,7 @@
     document.head.appendChild(style);
   }
 
-  // آماده‌سازی SDK تلگرام
+  // آماده‌سازی تلگرام
   const telegram = window.Telegram?.WebApp;
 
   if (telegram) {
@@ -166,6 +178,7 @@
     telegram.expand();
   }
 
+  // نمایش اعداد فارسی
   function formatMoney(value) {
     const number = Number(value ?? 0);
 
@@ -176,12 +189,25 @@
     }).format(number);
   }
 
+  // شناسه کاربر تلگرام
   function getUserId() {
     return telegram?.initDataUnsafe?.user?.id
       ? String(telegram.initDataUnsafe.user.id)
       : '';
   }
 
+  // امن‌سازی متن‌های ورودی
+  function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[char]);
+  }
+
+  // نمایش خطا و دکمه تلاش مجدد
   function renderMessage(message, isError = false) {
     app.innerHTML = `
       <div class="fa-message">
@@ -202,17 +228,7 @@
     );
   }
 
-  function escapeHTML(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    })[char]);
-  }
-
-  // دریافت اطلاعات از n8n
+  // درخواست اطلاعات داشبورد از n8n
   async function loadFinanceData() {
     state.loading = true;
     state.error = '';
@@ -225,7 +241,6 @@
         );
       }
 
-      // initData را کامل می‌فرستیم؛ n8n شناسه کاربر را استخراج می‌کند.
       const initData = telegram.initData;
 
       if (!initData) {
@@ -234,7 +249,6 @@
         );
       }
 
-      // استفاده از فرم برای جلوگیری از درخواست پیش‌پرواز CORS
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
@@ -257,21 +271,15 @@
         result = JSON.parse(responseText);
       } catch {
         throw new Error(
-          'پاسخ n8n JSON معتبر نیست. تنظیمات Respond to Webhook را بررسی کن.'
+          'پاسخ n8n معتبر نیست. خروجی Respond to Webhook را بررسی کن.'
         );
       }
 
-      // بعضی پاسخ‌های n8n ممکن است داخل آرایه برگردند.
-      if (Array.isArray(result)) {
-        result = result[0];
-      }
-
-      if (result?.json) {
-        result = result.json;
-      }
+      if (Array.isArray(result)) result = result[0];
+      if (result?.json) result = result.json;
 
       if (result?.ok === false) {
-        throw new Error(result.error || 'n8n نتوانست اطلاعات را دریافت کند.');
+        throw new Error(result.error || 'دریافت اطلاعات ناموفق بود.');
       }
 
       if (!result?.summary) {
@@ -283,6 +291,7 @@
       state.data = result;
       state.loading = false;
       state.error = '';
+
       render();
     } catch (error) {
       console.error('Finance Mini App:', error);
@@ -294,6 +303,7 @@
     }
   }
 
+  // صفحه خانه
   function renderHome() {
     const data = state.data;
     const summary = data.summary;
@@ -312,18 +322,20 @@
 
       <div class="fa-card fa-balance">
         <div class="fa-muted">موجودی خالص</div>
-        <div class="fa-number">${formatMoney(summary.balance)}</div>
+        <div class="fa-number">${formatMoney(summary.balance)} تومان</div>
       </div>
 
       <div class="fa-grid">
         <div class="fa-card">
           <div class="fa-muted">مجموع درآمد</div>
           <div class="fa-number">${formatMoney(summary.income)}</div>
+          <div class="fa-muted">تومان</div>
         </div>
 
         <div class="fa-card">
           <div class="fa-muted">مجموع هزینه</div>
           <div class="fa-number">${formatMoney(summary.expense)}</div>
+          <div class="fa-muted">تومان</div>
         </div>
       </div>
 
@@ -334,18 +346,25 @@
           categories.length
             ? categories.slice(0, 5).map(category => `
                 <div class="fa-row">
-                  <div class="fa-row-name">${escapeHTML(category.name || 'بدون عنوان')}</div>
-                  <div class="fa-row-amount">${formatMoney(category.amount)}</div>
+                  <div class="fa-row-name">
+                    ${escapeHTML(category.name || 'بدون عنوان')}
+                  </div>
+                  <div class="fa-row-amount">
+                    ${formatMoney(category.amount)} تومان
+                  </div>
                 </div>
               `).join('')
             : '<div class="fa-empty">هنوز دسته‌ای برای نمایش وجود ندارد.</div>'
         }
       </div>
 
-      <div class="fa-muted">شناسه کاربر: ${escapeHTML(data.userId || getUserId())}</div>
+      <div class="fa-muted">
+        شناسه کاربر: ${escapeHTML(data.userId || getUserId())}
+      </div>
     `;
   }
 
+  // صفحه گزارش
   function renderReports() {
     const summary = state.data.summary;
 
@@ -356,17 +375,17 @@
 
       <div class="fa-card">
         <div class="fa-muted">مجموع درآمد</div>
-        <div class="fa-number">${formatMoney(summary.income)}</div>
+        <div class="fa-number">${formatMoney(summary.income)} تومان</div>
       </div>
 
       <div class="fa-card">
         <div class="fa-muted">مجموع هزینه</div>
-        <div class="fa-number">${formatMoney(summary.expense)}</div>
+        <div class="fa-number">${formatMoney(summary.expense)} تومان</div>
       </div>
 
       <div class="fa-card">
         <div class="fa-muted">تراز مالی</div>
-        <div class="fa-number">${formatMoney(summary.balance)}</div>
+        <div class="fa-number">${formatMoney(summary.balance)} تومان</div>
       </div>
 
       <div class="fa-muted">
@@ -375,21 +394,144 @@
     `;
   }
 
+  // دریافت فهرست تراکنش‌ها
+  async function loadTransactions() {
+    const userId = getUserId();
+
+    if (!telegram || !userId) {
+      state.transactionsError =
+        'شناسه تلگرام پیدا نشد. مینی‌اپ را از داخل ربات تلگرام باز کن.';
+      state.transactionsLoading = false;
+      state.transactionsLoaded = true;
+      render();
+      return;
+    }
+
+    state.transactionsLoading = true;
+    state.transactionsError = '';
+    render();
+
+    try {
+      const response = await fetch(TRANSACTIONS_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+        },
+        body: 'userId=' + encodeURIComponent(userId)
+      });
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new Error(
+          `خطای n8n (${response.status}): ${responseText.slice(0, 200)}`
+        );
+      }
+
+      let result;
+
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          'پاسخ وب‌هوک تراکنش‌ها JSON معتبر نیست.'
+        );
+      }
+
+      if (Array.isArray(result)) result = result[0];
+      if (result?.json) result = result.json;
+
+      if (result?.ok === false) {
+        throw new Error(result.error || 'دریافت تراکنش‌ها ناموفق بود.');
+      }
+
+      state.transactions = Array.isArray(result?.transactions)
+        ? result.transactions
+        : [];
+    } catch (error) {
+      console.error('Finance transactions:', error);
+      state.transactionsError =
+        error.message || 'دریافت تراکنش‌ها ناموفق بود.';
+    } finally {
+      state.transactionsLoading = false;
+      state.transactionsLoaded = true;
+      render();
+    }
+  }
+
+  // صفحه تراکنش‌ها
   function renderTransactions() {
+    const transactions = state.transactions || [];
+
     return `
       <div class="fa-header">
-        <h2>تراکنش‌ها</h2>
+        <div>
+          <h2>تراکنش‌ها</h2>
+          <div class="fa-muted">آخرین ۵۰ تراکنش</div>
+        </div>
+
+        <button class="fa-button" id="fa-refresh-transactions" type="button">
+          به‌روزرسانی
+        </button>
       </div>
 
+      ${
+        state.transactionsLoading
+          ? '<div class="fa-card"><div class="fa-empty">در حال دریافت تراکنش‌ها...</div></div>'
+          : ''
+      }
+
+      ${
+        state.transactionsError
+          ? `<div class="fa-card"><div class="fa-error">${escapeHTML(state.transactionsError)}</div></div>`
+          : ''
+      }
+
+      ${
+        !state.transactionsLoading &&
+        !state.transactionsError &&
+        transactions.length === 0
+          ? '<div class="fa-card"><div class="fa-empty">تراکنشی برای نمایش پیدا نشد.</div></div>'
+          : ''
+      }
+
       <div class="fa-card">
-        <div class="fa-empty">
-          اتصال فهرست تراکنش‌ها به API هنوز پیاده‌سازی نشده است.
-        </div>
-        <button class="fa-button" id="fa-refresh">به‌روزرسانی اطلاعات</button>
+        ${
+          transactions.map(tx => {
+            const incoming = Number(tx.direction) === 1;
+            const amount = formatMoney(tx.amount);
+            const dateTime = [tx.date, tx.time].filter(Boolean).join('، ');
+            const details = [dateTime, tx.account, tx.description]
+              .filter(Boolean)
+              .map(escapeHTML)
+              .join(' · ');
+
+            return `
+              <div class="fa-row">
+                <div style="min-width:0; flex:1;">
+                  <div class="fa-row-name">
+                    ${escapeHTML(tx.title || 'تراکنش بدون عنوان')}
+                  </div>
+                  <div class="fa-muted" style="margin-top:5px;">
+                    ${details || 'بدون توضیحات'}
+                  </div>
+                </div>
+
+                <div
+                  class="fa-row-amount"
+                  style="color:${incoming ? '#15803d' : '#dc2626'};"
+                >
+                  ${incoming ? '+' : '−'} ${amount} تومان
+                </div>
+              </div>
+            `;
+          }).join('')
+        }
       </div>
     `;
   }
 
+  // نوار پایین برنامه
   function renderNavigation() {
     let nav = document.getElementById('fa-navigation');
 
@@ -425,6 +567,7 @@
     });
   }
 
+  // نمایش صفحه انتخاب‌شده
   function render() {
     if (!state.data) {
       renderMessage(state.error || 'در حال دریافت اطلاعات...');
@@ -444,9 +587,26 @@
       loadFinanceData
     );
 
+    document.getElementById('fa-refresh-transactions')?.addEventListener(
+      'click',
+      () => {
+        state.transactionsLoaded = false;
+        loadTransactions();
+      }
+    );
+
     renderNavigation();
+
+    // هنگام ورود به صفحه تراکنش‌ها، اطلاعات دریافت شود
+    if (
+      state.page === 'transactions' &&
+      !state.transactionsLoading &&
+      !state.transactionsLoaded
+    ) {
+      loadTransactions();
+    }
   }
 
-  // شروع برنامه
+  // اجرای اولیه
   loadFinanceData();
 })();
