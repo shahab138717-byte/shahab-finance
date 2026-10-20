@@ -1,30 +1,20 @@
+
 /*
-  Finance Mini App
-  اتصال مینی‌اپ تلگرام به n8n
+ Finance Mini App — اتصال به n8n
 */
 
-// ===============================
-// 1. اتصال به Telegram WebApp SDK
-// ===============================
-
+// 1. Telegram SDK
 (function initTelegramMiniApp() {
-  function exposeTelegramData() {
+  function expose() {
     const tg = window.Telegram && window.Telegram.WebApp;
 
     window.financeTelegram = {
       ready: Boolean(tg),
-
-      // فقط برای استفاده در رابط کاربری است؛
-      // سرور نباید به این شناسه بدون اعتبارسنجی اعتماد کند.
       userId: tg?.initDataUnsafe?.user?.id ?? null,
-
-      // این مقدار باید در سمت سرور اعتبارسنجی شود.
       initData: tg?.initData ?? "",
-
       getUserId() {
         return this.userId;
       },
-
       getInitData() {
         return this.initData;
       }
@@ -36,53 +26,72 @@
     }
   }
 
-  if (window.Telegram && window.Telegram.WebApp) {
-    exposeTelegramData();
+  if (window.Telegram?.WebApp) {
+    expose();
   } else {
     const sdk = document.createElement("script");
-
     sdk.src = "https://telegram.org/js/telegram-web-app.js";
-
-    sdk.onload = exposeTelegramData;
-
+    sdk.onload = expose;
     sdk.onerror = () => {
       window.financeTelegram = {
         ready: false,
         userId: null,
         initData: "",
-
-        getUserId() {
-          return null;
-        },
-
-        getInitData() {
-          return "";
-        }
+        getUserId() { return null; },
+        getInitData() { return ""; }
       };
-
-      console.warn(
-        "Telegram SDK بارگذاری نشد. صفحه را از داخل تلگرام باز کن."
-      );
     };
-
     document.head.appendChild(sdk);
   }
 })();
 
-
-// =====================================
-// 2. آدرس Webhook صفحه خانه در n8n
-// =====================================
-
-// این آدرس باید با Production URL در نود Webhook یکی باشد.
+// 2. آدرس Webhook
 const FINANCE_HOME_WEBHOOK_URL =
   "https://n8n.mediasun.info/webhook/api/finance-home";
 
+// 3. اطلاعات مالی
+const financeData = {
+  summary: {
+    income: 0,
+    expense: 0,
+    balance: 0
+  },
+  topCategories: [],
+  loading: true,
+  error: "",
+  loaded: false
+};
 
-// =====================================
-// 3. دریافت اطلاعات مالی از n8n
-// =====================================
+const state = {
+  page: "home",
+  selectedCategory: ""
+};
 
+const app = document.getElementById("app");
+const pageTitle = document.getElementById("pageTitle");
+
+// 4. توابع کمکی
+function toman(n) {
+  return new Intl.NumberFormat("fa-IR")
+    .format(Number(n) || 0) + " تومان";
+}
+
+function compact(n) {
+  return new Intl.NumberFormat("fa-IR")
+    .format(Number(n) || 0);
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[m]));
+}
+
+// 5. دریافت اطلاعات از n8n
 async function getFinanceHomeFromN8n() {
   const initData =
     window.financeTelegram?.getInitData?.() || "";
@@ -95,154 +104,395 @@ async function getFinanceHomeFromN8n() {
 
   const response = await fetch(FINANCE_HOME_WEBHOOK_URL, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json"
     },
-
-    body: JSON.stringify({
-      initData: initData
-    })
+    body: JSON.stringify({ initData })
   });
 
-  if (!response.ok) {
+  let payload;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("پاسخ n8n قابل‌خواندن نیست.");
+  }
+
+  if (!response.ok || payload?.ok === false) {
     throw new Error(
+      payload?.error ||
       `خطا در دریافت اطلاعات مالی (${response.status})`
     );
   }
 
-  return await response.json();
+  if (!payload?.summary) {
+    throw new Error("ساختار پاسخ API معتبر نیست.");
+  }
+
+  return payload;
 }
 
+// 6. وضعیت بارگذاری و خطا
+function loadingHTML() {
+  return `
+    <section class="section">
+      <article class="card">
+        <div class="loading">در حال دریافت اطلاعات مالی…</div>
+      </article>
+    </section>
+  `;
+}
 
-// =====================================
-// 4. اطلاعات نمونه فعلی رابط کاربری
-// =====================================
+function errorHTML(message) {
+  return `
+    <section class="section">
+      <article class="card">
+        <div class="section-title">
+          دریافت اطلاعات ناموفق بود
+        </div>
+        <p class="section-caption">
+          ${escapeHtml(message)}
+        </p>
+        <button
+          class="primary-button"
+          onclick="retryFinanceLoad()"
+        >
+          تلاش دوباره
+        </button>
+      </article>
+    </section>
+  `;
+}
 
-const sampleData = {
-  accounts: [
-    {
-      name: "حساب اصلی",
-      balance: 125000000,
-      income: 45000000,
-      expense: 18500000
-    },
-    {
-      name: "حساب پس‌انداز",
-      balance: 78000000,
-      income: 10000000,
-      expense: 0
-    },
-    {
-      name: "کارت روزمره",
-      balance: 14500000,
-      income: 8000000,
-      expense: 6200000
+// 7. صفحه خانه
+function renderHome() {
+  if (financeData.loading) return loadingHTML();
+  if (financeData.error) return errorHTML(financeData.error);
+
+  const { income, expense, balance } = financeData.summary;
+  const cats = financeData.topCategories;
+
+  const max = Math.max(
+    1,
+    ...cats.map(c => Number(c.amount) || 0)
+  );
+
+  return `
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">خلاصه وضعیت مالی</div>
+        <div class="section-caption">اطلاعات دیتابیس</div>
+      </div>
+
+      <div class="summary-grid">
+        <article class="card summary-card">
+          <div class="stat-label">موجودی خالص</div>
+          <div class="summary-value">${toman(balance)}</div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="stat-label">مجموع درآمد</div>
+          <div class="summary-value income">${toman(income)}</div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="stat-label">مجموع هزینه</div>
+          <div class="summary-value expense">${toman(expense)}</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">بیشترین هزینه‌ها</div>
+        <div class="section-caption">۵ دسته برتر</div>
+      </div>
+
+      ${
+        cats.length
+          ? `<div class="category-list">
+              ${cats.map(c => {
+                const amount = Number(c.amount) || 0;
+
+                return `
+                  <article class="card category-row">
+                    <div class="category-top">
+                      <div class="category-name">
+                        ${escapeHtml(c.name || "بدون دسته")}
+                      </div>
+                      <div class="category-amount">
+                        ${toman(amount)}
+                      </div>
+                    </div>
+
+                    <div class="progress">
+                      <span style="width:${
+                        Math.round(amount / max * 100)
+                      }%"></span>
+                    </div>
+                  </article>
+                `;
+              }).join("")}
+            </div>`
+          : `<article class="card">
+              <div class="section-caption">
+                هنوز هزینه‌ای برای نمایش وجود ندارد.
+              </div>
+            </article>`
+      }
+
+      <button
+        class="primary-button"
+        onclick="navigate('reports')"
+      >
+        مشاهده گزارش
+      </button>
+    </section>
+  `;
+}
+
+// 8. صفحه گزارش
+function renderReports() {
+  if (financeData.loading) return loadingHTML();
+  if (financeData.error) return errorHTML(financeData.error);
+
+  const { income, expense, balance } = financeData.summary;
+  const cats = financeData.topCategories;
+
+  const selected =
+    cats.find(c => c.name === state.selectedCategory) ||
+    cats[0];
+
+  const max = Math.max(
+    1,
+    ...cats.map(c => Number(c.amount) || 0)
+  );
+
+  return `
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">گزارش مالی</div>
+        <div class="section-caption">اطلاعات دیتابیس</div>
+      </div>
+
+      <div class="summary-grid">
+        <article class="card summary-card">
+          <div class="stat-label">مجموع درآمد</div>
+          <div class="summary-value income">${toman(income)}</div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="stat-label">مجموع هزینه</div>
+          <div class="summary-value expense">${toman(expense)}</div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="stat-label">خالص درآمد</div>
+          <div class="summary-value">${toman(balance)}</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">هزینه دسته‌بندی‌ها</div>
+      </div>
+
+      ${
+        cats.length
+          ? `<article class="card report-card">
+              <div class="section-caption">دسته انتخاب‌شده</div>
+              <div class="report-total">
+                ${escapeHtml(selected?.name || "")}
+              </div>
+              <div>${toman(selected?.amount || 0)}</div>
+
+              <div class="category-list">
+                ${cats.map(c => {
+                  const amount = Number(c.amount) || 0;
+
+                  return `
+                    <article class="category-row">
+                      <div class="category-top">
+                        <div class="category-name">
+                          ${escapeHtml(c.name)}
+                        </div>
+                        <div class="category-amount">
+                          ${toman(amount)}
+                        </div>
+                      </div>
+                      <div class="progress">
+                        <span style="width:${
+                          Math.round(amount / max * 100)
+                        }%"></span>
+                      </div>
+                    </article>
+                  `;
+                }).join("")}
+              </div>
+
+              <select
+                class="select"
+                onchange="selectCategory(this.value)"
+              >
+                ${cats.map(c => `
+                  <option
+                    value="${escapeHtml(c.name)}"
+                    ${c.name === (selected?.name || "")
+                      ? "selected" : ""}
+                  >
+                    ${escapeHtml(c.name)}
+                  </option>
+                `).join("")}
+              </select>
+            </article>`
+          : `<article class="card">
+              <div class="section-caption">
+                دسته‌ای برای گزارش وجود ندارد.
+              </div>
+            </article>`
+      }
+    </section>
+  `;
+}
+
+// 9. صفحه تراکنش‌ها
+function renderTransactions() {
+  return `
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">تراکنش‌ها</div>
+      </div>
+
+      <article class="card">
+        <div class="section-caption">
+          فهرست تراکنش‌ها هنوز به API متصل نشده است.
+        </div>
+      </article>
+    </section>
+  `;
+}
+
+// 10. نمایش صفحه
+function render() {
+  const titles = {
+    home: "خانه",
+    reports: "گزارش",
+    transactions: "تراکنش‌ها"
+  };
+
+  if (pageTitle) {
+    pageTitle.textContent = titles[state.page] || "خانه";
+  }
+
+  if (app) {
+    app.innerHTML =
+      state.page === "home"
+        ? renderHome()
+        : state.page === "reports"
+          ? renderReports()
+          : renderTransactions();
+  }
+
+  document.querySelectorAll(".nav-item").forEach(btn => {
+    btn.classList.toggle(
+      "active",
+      btn.dataset.page === state.page
+    );
+  });
+}
+
+// 11. جابه‌جایی بین صفحات
+function navigate(page) {
+  state.page = page;
+  render();
+}
+
+function selectCategory(category) {
+  state.selectedCategory = category;
+  render();
+}
+
+// 12. تلاش مجدد
+async function retryFinanceLoad() {
+  financeData.loading = true;
+  financeData.error = "";
+  render();
+
+  await loadFinanceData();
+}
+
+// 13. دریافت و ذخیره پاسخ API
+async function loadFinanceData() {
+  try {
+    const data = await getFinanceHomeFromN8n();
+
+    financeData.summary = {
+      income: Number(data.summary.income) || 0,
+      expense: Number(data.summary.expense) || 0,
+      balance: Number(
+        data.summary.balance ??
+        (
+          (Number(data.summary.income) || 0) -
+          (Number(data.summary.expense) || 0)
+        )
+      ) || 0
+    };
+
+    financeData.topCategories =
+      Array.isArray(data.topCategories)
+        ? data.topCategories.map(c => ({
+            name: String(c.name ?? "بدون دسته"),
+            amount: Number(c.amount) || 0
+          }))
+        : [];
+
+    financeData.loaded = true;
+
+    if (
+      !state.selectedCategory &&
+      financeData.topCategories.length
+    ) {
+      state.selectedCategory =
+        financeData.topCategories[0].name;
     }
-  ],
+  } catch (e) {
+    financeData.error =
+      e?.message || "خطای ناشناخته در اتصال به سرور";
+  } finally {
+    financeData.loading = false;
+    render();
+  }
+}
 
-  savings: 26500000,
+// 14. منوی پایین صفحه
+document.querySelectorAll(".nav-item").forEach(btn => {
+  btn.addEventListener("click", () => {
+    navigate(btn.dataset.page);
+  });
+});
 
-  topCategories: [
-    { name: "خوراک", amount: 3850000 },
-    { name: "حمل‌ونقل", amount: 2700000 },
-    { name: "خرید", amount: 2350000 },
-    { name: "قبوض", amount: 1800000 },
-    { name: "سرگرمی", amount: 1250000 }
-  ],
+// در دسترس بودن توابع برای دکمه‌های HTML
+window.navigate = navigate;
+window.selectCategory = selectCategory;
+window.retryFinanceLoad = retryFinanceLoad;
 
-  monthly: {
-    "فروردین": [
-      2800000, 3200000, 2600000,
-      4100000, 3700000, 3850000
-    ],
+// 15. اجرای اولیه
+render();
 
-    "اردیبهشت": [
-      1800000, 2400000, 2200000,
-      3100000, 2900000, 3300000
-    ],
-
-    "خرداد": [
-      2400000, 2900000, 3100000,
-      3500000, 3200000, 3600000
-    ]
-  },
-
-  transactions: [
-    {
-      title: "خرید مواد غذایی",
-      category: "خوراک",
-      amount: 850000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۲۱",
-      time: "۱۸:۴۵",
-      account: "حساب اصلی"
-    },
-    {
-      title: "واریز حقوق",
-      category: "درآمد",
-      amount: 25000000,
-      direction: 1,
-      date: "۱۴۰۵/۰۶/۲۰",
-      time: "۰۹:۱۵",
-      account: "حساب اصلی"
-    },
-    {
-      title: "تاکسی اینترنتی",
-      category: "حمل‌ونقل",
-      amount: 320000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۱۹",
-      time: "۱۴:۲۰",
-      account: "کارت روزمره"
-    },
-    {
-      title: "قبض تلفن",
-      category: "قبوض",
-      amount: 185000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۱۸",
-      time: "۱۱:۰۵",
-      account: "حساب اصلی"
-    },
-    {
-      title: "واریز به پس‌انداز",
-      category: "سرمایه‌گذاری",
-      amount: 5000000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۱۷",
-      time: "۲۰:۱۰",
-      account: "حساب اصلی"
-    },
-    {
-      title: "برگشت وجه خرید",
-      category: "درآمد",
-      amount: 420000,
-      direction: 1,
-      date: "۱۴۰۵/۰۶/۱۶",
-      time: "۱۳:۳۵",
-      account: "کارت روزمره"
-    },
-    {
-      title: "خرید پوشاک",
-      category: "خرید",
-      amount: 1250000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۱۵",
-      time: "۱۷:۴۰",
-      account: "کارت روزمره"
-    },
-    {
-      title: "رستوران",
-      category: "خوراک",
-      amount: 780000,
-      direction: -1,
-      date: "۱۴۰۵/۰۶/۱۴",
-      time: "۲۱:۲۵",
-      account: "کارت روزمره"
-    },
-    {
-      title: "دریافت از حساب پس‌انداز",
-      category: "سرمایه‌گذاری",
-      amount: 3000000,
-      direction: 1,
+// منتظر آماده شدن اطلاعات تلگرام می‌مانیم
+(function waitForTelegramData(attempt = 0) {
+  if (window.financeTelegram?.getInitData?.()) {
+    loadFinanceData();
+  } else if (attempt < 20) {
+    setTimeout(
+      () => waitForTelegramData(attempt + 1),
+      150
+    );
+  } else {
+    financeData.loading = false;
+    financeData.error =
+      "مینی‌اپ را از داخل تلگرام باز کن تا اطلاعات احراز هویت ارسال شود.";
+    render();
+  }
+})();
